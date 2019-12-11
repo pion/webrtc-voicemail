@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/pion/webrtc/v2"
@@ -85,6 +86,12 @@ func createVoicemail(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	if _, err := os.Stat("voicemails"); os.IsNotExist(err) {
+		if err = os.Mkdir("voicemails", 0755); err != nil {
+			panic(err)
+		}
+	}
+
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { http.ServeFile(w, r, r.URL.Path[1:]) })
 	http.HandleFunc("/create-voicemail", createVoicemail)
 
