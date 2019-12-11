@@ -1,0 +1,32 @@
+<html>
+  <head>
+  </head>
+
+  <body>
+    <h1> WebRTC Voicemail </h1>
+    <button onclick="window.startVoicemail()"> Start Voicemail </button>
+
+    <script>
+      let pc = new RTCPeerConnection()
+      navigator.mediaDevices.getUserMedia({audio: true})
+        .then(stream => {
+          pc.addStream(stream)
+          pc.createOffer().then(d => pc.setLocalDescription(d))
+      }).catch(window.alert)
+
+      function startVoicemail() {
+        fetch('/create-voicemail', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(pc.pendingLocalDescription)
+        })
+        .then(response => response.json())
+        .then(sdp => {
+          pc.setRemoteDescription(sdp).catch(window.alert)
+        })
+      }
+    </script>
+  </body>
+</html>
