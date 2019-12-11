@@ -95,6 +95,7 @@ func main() {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { http.ServeFile(w, r, r.URL.Path[1:]) })
 	http.HandleFunc("/create-voicemail", createVoicemail)
 
+	fmt.Println("Server has started on :8080")
 	panic(http.ListenAndServe(":8080", nil))
 }
 
