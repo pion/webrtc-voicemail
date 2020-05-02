@@ -56,8 +56,8 @@ func createVoicemail(w http.ResponseWriter, r *http.Request) {
 		}
 	})
 
-	// Allow us to receive 1 audio track, and 1 video track
-	if _, err = peerConnection.AddTransceiver(webrtc.RTPCodecTypeAudio); err != nil {
+	// Allow us to receive 1 audio track.
+	if _, err = peerConnection.AddTransceiverFromKind(webrtc.RTPCodecTypeAudio); err != nil {
 		panic(err)
 	}
 
