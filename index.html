@@ -10,7 +10,9 @@
       let pc = new RTCPeerConnection()
       navigator.mediaDevices.getUserMedia({audio: true})
         .then(stream => {
-          pc.addStream(stream)
+          stream.getTracks().forEach(track => {
+            pc.addTrack(track, stream)
+          })
           pc.createOffer().then(d => pc.setLocalDescription(d))
       }).catch(window.alert)
 

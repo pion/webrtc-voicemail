@@ -8,8 +8,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/pion/webrtc/v2"
-	"github.com/pion/webrtc/v2/pkg/media/oggwriter"
+	"github.com/pion/webrtc/v3"
+	"github.com/pion/webrtc/v3/pkg/media/oggwriter"
 )
 
 func createVoicemail(w http.ResponseWriter, r *http.Request) {
@@ -19,16 +19,21 @@ func createVoicemail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create a MediaEngine object to configure the supported codec
-	m := webrtc.MediaEngine{}
-	m.RegisterCodec(webrtc.NewRTPOpusCodec(webrtc.DefaultPayloadTypeOpus, 48000))
+	m := &webrtc.MediaEngine{}
+	if err := m.RegisterCodec(webrtc.RTPCodecParameters{
+		RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "audio/opus", ClockRate: 48000, Channels: 2, SDPFmtpLine: "", RTCPFeedback: nil},
+		PayloadType:        96,
+	}, webrtc.RTPCodecTypeAudio); err != nil {
+		panic(err)
+	}
 
 	peerConnection, err := webrtc.NewAPI(webrtc.WithMediaEngine(m)).NewPeerConnection(webrtc.Configuration{})
 	if err != nil {
 		panic(err)
 	}
 
-	peerConnection.OnTrack(func(track *webrtc.Track, receiver *webrtc.RTPReceiver) {
-		if track.Codec().Name != webrtc.Opus {
+	peerConnection.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
+		if track.Codec().MimeType != webrtc.MimeTypeOpus {
 			return
 		}
 
@@ -43,12 +48,12 @@ func createVoicemail(w http.ResponseWriter, r *http.Request) {
 			panic(err)
 		}
 
-		fmt.Printf("Got Opus track, saving to disk as %s (48 kHz, 2 channels) \n", fileName)
+		fmt.Printf("Got %s track, saving to disk as %s (48 kHz, 2 channels) \n", track.Codec().MimeType, fileName)
 
 		for {
-			rtpPacket, err := track.ReadRTP()
-			if err != nil {
-				panic(err)
+			rtpPacket, _, readErr := track.ReadRTP()
+			if readErr != nil {
+				panic(readErr)
 			}
 			if err := oggFile.WriteRTP(rtpPacket); err != nil {
 				panic(err)
@@ -95,7 +100,7 @@ func main() {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { http.ServeFile(w, r, r.URL.Path[1:]) })
 	http.HandleFunc("/create-voicemail", createVoicemail)
 
-	fmt.Println("Server has started on :8080")
+	fmt.Println("Server has started on http://localhost:8080")
 	panic(http.ListenAndServe(":8080", nil))
 }
 
