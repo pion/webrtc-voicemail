@@ -21,7 +21,7 @@
         fetch('/create-voicemail', {
             method: 'POST',
             headers: {
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/sdp'
             },
             body: pc.pendingLocalDescription.sdp
         }).then(r => r.text())
