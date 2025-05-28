@@ -1,37 +1,41 @@
 package main
 
 import (
-	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"math/rand"
 	"net/http"
 	"os"
 	"time"
 
-	"github.com/pion/webrtc/v3"
-	"github.com/pion/webrtc/v3/pkg/media/oggwriter"
+	"github.com/pion/webrtc/v4"
+	"github.com/pion/webrtc/v4/pkg/media/oggwriter"
 )
 
 func createVoicemail(w http.ResponseWriter, r *http.Request) {
-	sdp := webrtc.SessionDescription{}
-	if err := json.NewDecoder(r.Body).Decode(&sdp); err != nil {
+	// Read the offer from HTTP Request
+	offer, err := io.ReadAll(r.Body)
+	if err != nil {
 		panic(err)
 	}
 
 	// Create a MediaEngine object to configure the supported codec
 	m := &webrtc.MediaEngine{}
 	if err := m.RegisterCodec(webrtc.RTPCodecParameters{
-		RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: "audio/opus", ClockRate: 48000, Channels: 2, SDPFmtpLine: "", RTCPFeedback: nil},
-		PayloadType:        96,
+		RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus},
+		PayloadType:        111,
 	}, webrtc.RTPCodecTypeAudio); err != nil {
 		panic(err)
 	}
 
+	// Create a new PeerConnection
 	peerConnection, err := webrtc.NewAPI(webrtc.WithMediaEngine(m)).NewPeerConnection(webrtc.Configuration{})
 	if err != nil {
 		panic(err)
 	}
 
+	// Set a handler for when a new remote track starts, this handler saves buffers to disk as
 	peerConnection.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
 		if track.Codec().MimeType != webrtc.MimeTypeOpus {
 			return
@@ -52,6 +56,10 @@ func createVoicemail(w http.ResponseWriter, r *http.Request) {
 
 		for {
 			rtpPacket, _, readErr := track.ReadRTP()
+			if errors.Is(readErr, io.EOF) {
+				fmt.Printf("Done saving to disk as %s (48 kHz, 2 channels) \n", fileName)
+				return
+			}
 			if readErr != nil {
 				panic(readErr)
 			}
@@ -66,9 +74,15 @@ func createVoicemail(w http.ResponseWriter, r *http.Request) {
 		panic(err)
 	}
 
-	if err = peerConnection.SetRemoteDescription(sdp); err != nil {
+	if err = peerConnection.SetRemoteDescription(webrtc.SessionDescription{
+		Type: webrtc.SDPTypeOffer,
+		SDP:  string(offer),
+	}); err != nil {
 		panic(err)
 	}
+
+	// Create channel that is blocked until ICE Gathering is complete
+	gatherComplete := webrtc.GatheringCompletePromise(peerConnection)
 
 	answer, err := peerConnection.CreateAnswer(nil)
 	if err != nil {
@@ -79,13 +93,13 @@ func createVoicemail(w http.ResponseWriter, r *http.Request) {
 		panic(err)
 	}
 
-	output, err := json.MarshalIndent(answer, "", "  ")
-	if err != nil {
-		panic(err)
-	}
+	// Block until ICE Gathering is complete, disabling trickle ICE
+	// we do this because we only can exchange one signaling message
+	// in a production application you should exchange ICE Candidates via OnICECandidate
+	<-gatherComplete
 
-	w.Header().Set("Content-Type", "application/json")
-	if _, err := w.Write(output); err != nil {
+	w.Header().Set("Content-Type", "application/sdp")
+	if _, err := w.Write([]byte(peerConnection.LocalDescription().SDP)); err != nil {
 		panic(err)
 	}
 }

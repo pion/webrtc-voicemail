@@ -5,6 +5,7 @@
   <body>
     <h1> WebRTC Voicemail </h1>
     <button onclick="window.startVoicemail()"> Start Voicemail </button>
+    <button onclick="window.stopVoicemail()"> Stop Voicemail </button>
 
     <script>
       let pc = new RTCPeerConnection()
@@ -22,12 +23,15 @@
             headers: {
               'Content-Type': 'application/json'
             },
-            body: JSON.stringify(pc.pendingLocalDescription)
-        })
-        .then(response => response.json())
+            body: pc.pendingLocalDescription.sdp
+        }).then(r => r.text())
         .then(sdp => {
-          pc.setRemoteDescription(sdp).catch(window.alert)
+          pc.setRemoteDescription({type: 'answer', sdp}).catch(window.alert)
         })
+      }
+
+      function stopVoicemail() {
+        pc.close()
       }
     </script>
   </body>
